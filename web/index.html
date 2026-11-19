@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Algorithm Visualizer</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #dde1e8;
+    --normal: #4c78a8; --compare: #f2cf5b; --swap: #e45756; --pivot: #b279a2;
+    --sorted: #54a24b; --range: #9ecae9; --accent: #2f5d8a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171d; --panel: #1c2028; --ink: #e6e9ef; --muted: #98a1b2; --line: #2c323d; --accent: #7fb0e0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 32px; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel);
+              border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  select, input[type=number] { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px;
+              background: var(--bg); color: var(--ink); }
+  input[type=number] { width: 80px; }
+  input[type=range] { width: 120px; }
+  .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg);
+           color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 84px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .stage { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  canvas { width: 100%; height: 380px; display: block; }
+  .info { display: grid; gap: 4px; margin-top: 12px; }
+  .complexity { font-weight: 600; }
+  .stats { font-variant-numeric: tabular-nums; color: var(--muted); white-space: pre; }
+  .note { min-height: 1.4em; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+                         margin-right: 5px; vertical-align: -1px; background: var(--c); }
+  .error { color: var(--swap); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Algorithm Visualizer</h1>
+  <p class="sub">The steps are recorded by the Java classes (<code>Algorithm.run()</code>) and played back here.</p>
+
+  <div class="controls">
+    <label>Algorithm <select id="algo"></select></label>
+    <label>Array type <select id="kind"></select></label>
+    <label>Size <span><input id="size" type="range" min="5" max="100" value="30"> <b id="sizeVal">30</b></span></label>
+    <label>Speed <input id="speed" type="range" min="1" max="100" value="40"></label>
+    <label>Target <input id="target" type="number" placeholder="random"></label>
+    <div class="buttons">
+      <button id="start" class="primary">Start</button>
+      <button id="prev">Prev</button>
+      <button id="next">Next</button>
+      <button id="reset">Reset</button>
+      <button id="fresh">New array</button>
+    </div>
+  </div>
+
+  <div class="stage"><canvas id="canvas"></canvas></div>
+
+  <div class="info">
+    <div class="complexity" id="complexity"></div>
+    <div class="stats" id="stats"></div>
+    <div class="note" id="note"></div>
+  </div>
+  <div class="legend">
+    <span style="--c:var(--normal)">Normal</span>
+    <span style="--c:var(--compare)">Being compared</span>
+    <span style="--c:var(--swap)">Swap / write</span>
+    <span style="--c:var(--pivot)">Pivot / middle</span>
+    <span style="--c:var(--range)">Active range</span>
+    <span style="--c:var(--sorted)">Sorted / found</span>
+  </div>
+</main>
+
+<script>
+// Role ordinals, same order as Role.java: NORMAL, COMPARE, SWAP, PIVOT, SORTED, FOUND, RANGE
+const ROLE_VARS = ["--normal", "--compare", "--swap", "--pivot", "--sorted", "--sorted", "--range"];
+const $ = id => document.getElementById(id);
+let algos = [], run = null, index = -1, timer = null;
+
+async function init() {
+  const res = await fetch("/api/algorithms");
+  const meta = await res.json();
+  algos = meta.algorithms;
+  for (const a of algos) $("algo").add(new Option(a.name, a.name));
+  for (const k of meta.kinds) $("kind").add(new Option(k.label, k.id));
+  $("algo").onchange = () => load(true);
+  $("kind").onchange = () => load(false);
+  $("size").oninput = () => { $("sizeVal").textContent = $("size").value; };
+  $("size").onchange = () => load(false);
+  $("target").onchange = () => load(true);
+  $("speed").oninput = () => { if (timer) { stop(); play(); } };
+  $("start").onclick = startPause;
+  $("next").onclick = () => { stop(); go(index + 1); };
+  $("prev").onclick = () => { stop(); go(index - 1); };
+  $("reset").onclick = () => { stop(); go(-1); $("start").textContent = "Start"; };
+  $("fresh").onclick = () => load(false);
+  window.onresize = draw;
+  load(false);
+}
+
+// The server generates a fresh array on every request.
+async function load(keepArray) {
+  stop();
+  const a = algos.find(x => x.name === $("algo").value);
+  $("target").disabled = !a.needsTarget;
+  const p = new URLSearchParams({ algo: a.name, kind: $("kind").value, size: $("size").value, target: $("target").value });
+  const res = await fetch("/api/run?" + p);
+  const body = await res.json();
+  if (!res.ok) { $("note").innerHTML = '<span class="error">' + body.error + "</span>"; return; }
+  run = body;
+  $("complexity").textContent = run.name + ":  " + run.complexity + (run.target !== null ? "   (target " + run.target + ")" : "");
+  $("start").textContent = "Start";
+  go(-1);
+}
+
+function go(i) {
+  if (!run) return;
+  index = Math.max(-1, Math.min(run.steps.length - 1, i));
+  draw();
+  const s = index >= 0 ? run.steps[index] : null;
+  $("stats").textContent = "Comparisons: " + (s ? s.c : 0) + "    Writes: " + (s ? s.w : 0)
+                         + "    Step " + (index + 1) + " / " + run.steps.length;
+  $("note").textContent = s ? s.n : "Press Start";
+  $("prev").disabled = index < 0;
+  $("next").disabled = index >= run.steps.length - 1;
+}
+
+function startPause() {
+  if (timer) { stop(); $("start").textContent = "Resume"; return; }
+  if (index >= run.steps.length - 1) go(-1);
+  play();
+}
+function play() {
+  $("start").textContent = "Pause";
+  timer = setInterval(() => {
+    if (index >= run.steps.length - 1) { stop(); $("start").textContent = "Start"; return; }
+    go(index + 1);
+  }, Math.max(1, 600 / $("speed").value));
+}
+function stop() { clearInterval(timer); timer = null; }
+
+function draw() {
+  const c = $("canvas"), dpr = window.devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const W = c.clientWidth, H = c.clientHeight;
+  g.clearRect(0, 0, W, H);
+  if (!run) return;
+  const s = index >= 0 ? run.steps[index] : null;
+  const data = s ? s.d : run.start, n = data.length;
+  const css = getComputedStyle(document.documentElement);
+  const colours = ROLE_VARS.map(v => css.getPropertyValue(v).trim());
+  const max = Math.max(1, ...data), bw = W / n, labels = n <= 30, usable = H - (labels ? 26 : 6);
+  for (let i = 0; i < n; i++) {
+    const h = data[i] / max * usable, x = i * bw;
+    g.fillStyle = colours[s ? +s.r[i] : 0];
+    g.fillRect(x + 1, usable - h + 2, Math.max(1, bw - 2), h);
+    if (labels) {
+      g.fillStyle = css.getPropertyValue("--muted"); g.font = "11px system-ui"; g.textAlign = "center";
+      g.fillText(data[i], x + bw / 2, H - 8);
+    }
+  }
+}
+
+init().catch(e => { $("note").innerHTML = '<span class="error">Could not reach the Java server: ' + e + "</span>"; });
+</script>
+</body>
+</html>
