@@ -8,4 +8,5 @@ public class RandomPivot implements PivotStrategy {
 
     @Override public int choose(int[] a, int lo, int hi, Less less) { return lo + random.nextInt(hi - lo + 1); }
     @Override public String label() { return "random pivot"; }
+    @Override public String rule() { return "p = random index from lo to hi"; }
 }

@@ -3,11 +3,13 @@ package visualizer.ui;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridLayout;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-import javax.swing.BoxLayout;
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -22,40 +24,44 @@ import javax.swing.event.DocumentListener;
 import visualizer.algorithms.Algorithm;
 import visualizer.algorithms.AlgorithmFactory;
 import visualizer.model.ArrayModel;
-import visualizer.model.Role;
-import visualizer.model.Step;
+import visualizer.playback.Player;
+import visualizer.playback.Race;
 
 /**
- * The window. It only talks to the Algorithm type, so it works with any algorithm
- * without knowing which one it is (polymorphism). All steps are recorded first, then replayed,
- * which is what makes the Previous button possible.
+ * The window (the controller). It only talks to the Algorithm type, so it works with any algorithm
+ * without knowing which one it is (polymorphism). Each algorithm's steps are recorded first and
+ * played by a Player; AlgorithmViews observe the Players. Choosing a second algorithm in the
+ * "vs" box races the two on the same array, driven by one shared clock.
  */
 public class VisualizerFrame extends JFrame {
     private static final long serialVersionUID = 1L;
+    private static final String NO_RACE = "(no race)";
 
     private final transient ArrayModel model = new ArrayModel();
-    private final ArrayPanel panel = new ArrayPanel();
     private final JComboBox<String> algoBox = new JComboBox<>(AlgorithmFactory.names());
+    private final JComboBox<String> raceBox = new JComboBox<>();
     private final JComboBox<ArrayModel.Kind> kindBox = new JComboBox<>(ArrayModel.Kind.values());
     private final JSlider sizeSlider = new JSlider(5, 100, 30);
     private final JSlider speedSlider = new JSlider(1, 100, 40);
     private final JTextField targetField = new JTextField(4);
     private final JButton startButton = new JButton("Start");
-    private final JLabel complexityLabel = new JLabel(" ");
-    private final JLabel statsLabel = new JLabel(" ");
-    private final JLabel noteLabel = new JLabel(" ");
+    private final JPanel viewsPanel = new JPanel(new GridLayout(0, 1, 0, 4));
+    private final JLabel statusLabel = new JLabel(" ");
     private final Timer timer;
 
-    private transient List<Step> steps;    // every frame of the current run
-    private int index = -1;                // frame being shown (-1 = the untouched array)
+    private transient List<Player> players = new ArrayList<>();
+    private final transient List<AlgorithmView> views = new ArrayList<>();
+    private int time;                      // shared clock: every player shows frame min(time, its length)
     private int[] startData;
     private Integer target;                // null for sorts
+    private boolean fillingRaceBox;
 
     public VisualizerFrame() {
         super("Algorithm Visualizer");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        timer = new Timer(delay(), e -> next());
+        timer = new Timer(delay(), e -> tick());
         buildLayout();
+        fillRaceBox();
         wireEvents();
         model.generate(ArrayModel.Kind.RANDOM, sizeSlider.getValue());
         reset();
@@ -65,31 +71,33 @@ public class VisualizerFrame extends JFrame {
 
     // ---------- layout ----------
     private void buildLayout() {
-        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        controls.add(algoBox);
-        controls.add(kindBox);
-        controls.add(new JLabel("Size"));
-        controls.add(sizeSlider);
-        controls.add(new JLabel("Speed"));
-        controls.add(speedSlider);
-        controls.add(new JLabel("Target:"));
-        controls.add(targetField);
-        controls.add(startButton);
-        controls.add(button("Prev", e -> previous()));
-        controls.add(button("Next", e -> stepForward()));
-        controls.add(button("Reset", e -> reset()));
-        controls.add(button("New array", e -> newArray()));
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        row1.add(algoBox);
+        row1.add(new JLabel("vs"));
+        row1.add(raceBox);
+        row1.add(kindBox);
+        row1.add(new JLabel("Size"));
+        row1.add(sizeSlider);
+        row1.add(new JLabel("Speed"));
+        row1.add(speedSlider);
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        row2.add(new JLabel("Target:"));
+        row2.add(targetField);
+        row2.add(startButton);
+        row2.add(button("Prev", e -> step(-1)));
+        row2.add(button("Next", e -> step(+1)));
+        row2.add(button("Reset", e -> rewind()));
+        row2.add(button("New array", e -> newArray()));
+        JPanel controls = new JPanel(new GridLayout(2, 1));
+        controls.add(row1);
+        controls.add(row2);
 
-        complexityLabel.setFont(complexityLabel.getFont().deriveFont(Font.BOLD));
-        JPanel info = new JPanel();
-        info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
-        info.add(complexityLabel);
-        info.add(statsLabel);
-        info.add(noteLabel);
+        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 13f));
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(4, 8, 6, 8));
 
         add(controls, BorderLayout.NORTH);
-        add(panel, BorderLayout.CENTER);
-        add(info, BorderLayout.SOUTH);
+        add(viewsPanel, BorderLayout.CENTER);
+        add(statusLabel, BorderLayout.SOUTH);
     }
 
     private static JButton button(String text, ActionListener action) {
@@ -99,7 +107,8 @@ public class VisualizerFrame extends JFrame {
     }
 
     private void wireEvents() {
-        algoBox.addActionListener(e -> reset());
+        algoBox.addActionListener(e -> { fillRaceBox(); reset(); });
+        raceBox.addActionListener(e -> { if (!fillingRaceBox) reset(); });
         kindBox.addActionListener(e -> newArray());
         sizeSlider.addChangeListener(e -> { if (!sizeSlider.getValueIsAdjusting()) newArray(); });
         speedSlider.addChangeListener(e -> timer.setDelay(delay()));
@@ -112,29 +121,56 @@ public class VisualizerFrame extends JFrame {
         });
     }
 
+    /** The "vs" box only offers algorithms of the same kind (sort vs sort, search vs search). */
+    private void fillRaceBox() {
+        fillingRaceBox = true;
+        Object previous = raceBox.getSelectedItem();
+        String first = (String) algoBox.getSelectedItem();
+        boolean search = AlgorithmFactory.create(first).needsTarget();
+        raceBox.removeAllItems();
+        raceBox.addItem(NO_RACE);
+        for (String name : AlgorithmFactory.names()) {
+            if (!name.equals(first) && AlgorithmFactory.create(name).needsTarget() == search) raceBox.addItem(name);
+        }
+        if (previous != null) raceBox.setSelectedItem(previous);   // kept only if still offered
+        fillingRaceBox = false;
+    }
+
     private int delay() {
         return Math.max(1, 600 / speedSlider.getValue());
     }
 
-    // ---------- controls ----------
+    // ---------- recording ----------
     void newArray() {
         model.generate((ArrayModel.Kind) kindBox.getSelectedItem(), sizeSlider.getValue());
         reset();
     }
 
-    /** Re-runs the chosen algorithm on the current array and shows the starting frame. */
+    /** Records the chosen algorithm(s) on the current array and shows the starting frame. */
     void reset() {
         timer.stop();
-        Algorithm algo = AlgorithmFactory.create((String) algoBox.getSelectedItem());
+        List<Algorithm> algorithms = new ArrayList<>();
+        algorithms.add(AlgorithmFactory.create((String) algoBox.getSelectedItem()));
+        String rival = (String) raceBox.getSelectedItem();
+        if (rival != null && !rival.equals(NO_RACE)) algorithms.add(AlgorithmFactory.create(rival));
+
         startData = model.copy();
-        if (algo.needsSorted()) Arrays.sort(startData);
-        targetField.setEnabled(algo.needsTarget());
-        target = algo.needsTarget() ? chooseTarget() : null;
-        steps = algo.run(startData, target == null ? 0 : target);
-        index = -1;
-        complexityLabel.setText(algo.getName() + ":  " + algo.complexity());
+        if (algorithms.stream().anyMatch(Algorithm::needsSorted)) Arrays.sort(startData);   // same input for both
+        boolean search = algorithms.get(0).needsTarget();
+        targetField.setEnabled(search);
+        target = search ? chooseTarget() : null;
+
+        players = new ArrayList<>();
+        for (Algorithm a : algorithms) {
+            Player p = new Player(a, startData, target == null ? 0 : target);
+            p.addListener(x -> updateStatus());
+            players.add(p);
+        }
+        showViews(players.size());
+        for (int i = 0; i < players.size(); i++) views.get(i).attach(players.get(i));
+        time = 0;
         startButton.setText("Start");
-        showStart();
+        updateStatus();
     }
 
     private int chooseTarget() {
@@ -145,63 +181,78 @@ public class VisualizerFrame extends JFrame {
         }
     }
 
+    /** One view per player; bars are shorter in race mode so both fit. */
+    private void showViews(int count) {
+        if (views.size() == count) return;
+        views.clear();
+        viewsPanel.removeAll();
+        for (int i = 0; i < count; i++) {
+            AlgorithmView v = new AlgorithmView(count == 1 ? 360 : 210);
+            views.add(v);
+            viewsPanel.add(v);
+        }
+        viewsPanel.revalidate();
+        if (isDisplayable()) pack();
+    }
+
+    // ---------- playback (one clock for every player) ----------
+    private int longest() {
+        int max = 0;
+        for (Player p : players) max = Math.max(max, p.length());
+        return max;
+    }
+
+    private boolean finished() { return time >= longest(); }
+
+    private void seekAll() {
+        for (Player p : players) p.seek(time);
+    }
+
     void startPause() {
         if (timer.isRunning()) {
             timer.stop();
             startButton.setText("Resume");
             return;
         }
-        if (index >= steps.size() - 1) reset();      // finished: start over
+        if (finished()) rewind();                    // finished: play again from the start
         startButton.setText("Pause");
         timer.start();
     }
 
-    void stepForward() {
-        timer.stop();
-        startButton.setText("Resume");
-        if (index < steps.size() - 1) {
-            index++;
-            showStep();
-        }
-    }
-
-    void previous() {
-        timer.stop();
-        startButton.setText("Resume");
-        if (index >= 0) index--;
-        if (index < 0) showStart();
-        else showStep();
-    }
-
     /** Called by the timer. */
-    private void next() {
-        if (index < steps.size() - 1) {
-            index++;
-            showStep();
+    private void tick() {
+        if (!finished()) {
+            time++;
+            seekAll();
         }
-        if (index >= steps.size() - 1) {
+        if (finished()) {
             timer.stop();
             startButton.setText("Start");
         }
     }
 
-    // ---------- display ----------
-    private void showStart() {
-        Role[] normal = new Role[startData.length];
-        Arrays.fill(normal, Role.NORMAL);
-        panel.show(new Step(startData, normal, "", 0, 0));
-        statsLabel.setText("Comparisons: 0    Writes: 0    Step 0 / " + steps.size());
-        noteLabel.setText(target == null ? "Press Start" : "Press Start to search for " + target);
+    void step(int direction) {
+        timer.stop();
+        startButton.setText("Resume");
+        time = Math.max(0, Math.min(longest(), time + direction));
+        seekAll();
     }
 
-    private void showStep() {
-        Step s = steps.get(index);
-        panel.show(s);
-        statsLabel.setText("Comparisons: " + s.getComparisons() + "    Writes: " + s.getWrites()
-                + "    Step " + (index + 1) + " / " + steps.size());
-        noteLabel.setText(s.getNote());
+    /** Replays the same recording from the start (same array, same target). */
+    void rewind() {
+        timer.stop();
+        time = 0;
+        seekAll();
+        startButton.setText("Start");
+    }
+
+    private void updateStatus() {
+        String text = target == null ? "" : "Target: " + target + "      ";
+        text += players.size() > 1 ? Race.result(players) : "";
+        statusLabel.setText(text.isEmpty() ? " " : text);
     }
 
     // ---------- used by tools that drive the window (e.g. screenshots) ----------
     void select(String algorithmName) { algoBox.setSelectedItem(algorithmName); }
+    void race(String algorithmName)   { raceBox.setSelectedItem(algorithmName); }
 }

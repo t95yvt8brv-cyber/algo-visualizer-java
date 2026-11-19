@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -61,45 +62,72 @@ public class WebServer {
         send(ex, 200, "application/json", sb.toString());
     }
 
-    /** GET /api/run?algo=Quick%20Sort&kind=RANDOM&size=30&target=12 : every recorded step. */
+    /**
+     * GET /api/run?algo=Merge%20Sort&vs=Heap%20Sort&kind=RANDOM&size=30&target=12
+     * Records one algorithm, or two on the same array when `vs` is given (race mode).
+     */
     private static void run(HttpExchange ex) throws IOException {
         try {
             Map<String, String> q = query(ex.getRequestURI().getRawQuery());
-            Algorithm algo = AlgorithmFactory.create(q.getOrDefault("algo", "Bubble Sort"));
+            List<Algorithm> algos = new ArrayList<>();
+            algos.add(AlgorithmFactory.create(q.getOrDefault("algo", "Bubble Sort")));
+            String vs = q.getOrDefault("vs", "").trim();
+            if (!vs.isEmpty()) algos.add(AlgorithmFactory.create(vs));
+            boolean search = algos.get(0).needsTarget();
+            for (Algorithm a : algos) {
+                if (a.needsTarget() != search) throw new IllegalArgumentException("A race needs two sorts or two searches");
+            }
+
             int size = Math.max(5, Math.min(100, Integer.parseInt(q.getOrDefault("size", "30"))));
             ArrayModel model = new ArrayModel();
             model.generate(ArrayModel.Kind.valueOf(q.getOrDefault("kind", "RANDOM")), size);
             int[] data = model.copy();
-            if (algo.needsSorted()) Arrays.sort(data);
+            if (algos.stream().anyMatch(Algorithm::needsSorted)) Arrays.sort(data);   // same input for both
 
             int target = 0;
-            if (algo.needsTarget()) {
+            if (search) {
                 String t = q.getOrDefault("target", "").trim();
                 target = t.isEmpty() ? data[new Random().nextInt(data.length)] : Integer.parseInt(t);
             }
-            List<Step> steps = algo.run(data, target);
 
-            StringBuilder sb = new StringBuilder(steps.size() * (size * 4 + 80));
-            sb.append("{\"name\":").append(str(algo.getName()))
-              .append(",\"complexity\":").append(str(algo.complexity()))
-              .append(",\"target\":").append(algo.needsTarget() ? String.valueOf(target) : "null")
-              .append(",\"start\":").append(Arrays.toString(data)).append(",\"steps\":[");
-            for (int i = 0; i < steps.size(); i++) {
-                Step s = steps.get(i);
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"target\":").append(search ? String.valueOf(target) : "null")
+              .append(",\"start\":").append(Arrays.toString(data)).append(",\"runs\":[");
+            for (int i = 0; i < algos.size(); i++) {
                 if (i > 0) sb.append(',');
-                StringBuilder roles = new StringBuilder();
-                for (Role r : s.getRoles()) roles.append(r.ordinal());   // one digit per element
-                sb.append("{\"d\":").append(Arrays.toString(s.getData()))
-                  .append(",\"r\":\"").append(roles).append('"')
-                  .append(",\"n\":").append(str(s.getNote()))
-                  .append(",\"c\":").append(s.getComparisons())
-                  .append(",\"w\":").append(s.getWrites()).append('}');
+                appendRun(sb, algos.get(i), algos.get(i).run(data, target));
             }
             sb.append("]}");
             send(ex, 200, "application/json", sb.toString());
-        } catch (IllegalArgumentException e) {      // unknown algorithm or kind, or a bad number
+        } catch (IllegalArgumentException e) {      // unknown algorithm or kind, a bad number, or a mixed race
             send(ex, 400, "application/json", "{\"error\":" + str(String.valueOf(e.getMessage())) + "}");
         }
+    }
+
+    /** One algorithm's name, complexity, pseudocode and every recorded step. */
+    private static void appendRun(StringBuilder sb, Algorithm algo, List<Step> steps) {
+        sb.append("{\"name\":").append(str(algo.getName()))
+          .append(",\"complexity\":").append(str(algo.complexity()))
+          .append(",\"code\":[");
+        List<String> code = algo.pseudocode();
+        for (int i = 0; i < code.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(str(code.get(i)));
+        }
+        sb.append("],\"steps\":[");
+        for (int i = 0; i < steps.size(); i++) {
+            Step s = steps.get(i);
+            if (i > 0) sb.append(',');
+            StringBuilder roles = new StringBuilder();
+            for (Role r : s.getRoles()) roles.append(r.ordinal());       // one digit per element
+            sb.append("{\"d\":").append(Arrays.toString(s.getData()))
+              .append(",\"r\":\"").append(roles).append('"')
+              .append(",\"n\":").append(str(s.getNote()))
+              .append(",\"c\":").append(s.getComparisons())
+              .append(",\"w\":").append(s.getWrites())
+              .append(",\"l\":").append(s.getLine()).append('}');
+        }
+        sb.append("]}");
     }
 
     /** Serves web/index.html for every other path. */

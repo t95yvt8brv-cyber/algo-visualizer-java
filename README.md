@@ -1,6 +1,7 @@
 # Algorithm Visualizer (Java)
 
-Animates 12 sorting and 5 searching algorithms step by step, with live counts of comparisons and writes.
+Animates 12 sorting and 5 searching algorithms step by step, with live counts of comparisons and writes,
+and highlights the line of pseudocode being run. **Race mode** runs two algorithms side by side on the same array.
 It has two views on the same algorithm classes: a Swing desktop window and a browser page on localhost.
 No libraries are needed (Swing and the HTTP server ship with the JDK). Needs Java 11 or newer.
 
@@ -54,12 +55,20 @@ All searches except Linear Search run on a sorted copy of the array.
 | Control | What it does |
 | --- | --- |
 | Algorithm box | Any of the 17 algorithms above |
+| vs box | Pick a second algorithm of the same kind to race it on the same array (or "(no race)") |
 | Array type box | Random, nearly sorted, reversed, few unique values |
 | Size / Speed | Number of bars (5 to 100) and animation speed |
 | Target | Value to search for (blank = a random value from the array). The run updates as you type. |
 | Start / Pause / Resume | Plays the recorded steps |
 | Prev / Next | Step backwards or forwards one frame |
-| Reset / New array | Replay the same array, or generate a new one |
+| Reset / New array | Replay the same recording from the start, or generate a new array |
+
+The pseudocode panel next to the bars highlights the line each frame belongs to.
+In a race both algorithms share one clock, so the one with fewer steps finishes first; the bar at the
+bottom announces the winner with its step, comparison and write counts.
+
+The browser version has the same features, and its URL can preselect a race, for example
+`http://localhost:8080/?algo=Bubble%20Sort&vs=Merge%20Sort&kind=REVERSED&size=40`.
 
 Colours: yellow = being compared, red = swap or write, purple = pivot, middle or heap parent,
 light blue = active range, green = sorted or found.
@@ -73,7 +82,8 @@ src/visualizer/
   algorithms/   Algorithm (abstract), SortingAlgorithm, SearchingAlgorithm, AlgorithmFactory
     sorting/    the 12 sorts, DistributionSort, PivotStrategy + 3 pivot rules
     searching/  the 5 searches
-  ui/           VisualizerFrame (Swing window), ArrayPanel (draws a Step)
+  playback/     Player (plays steps, notifies listeners), PlaybackListener (observer), Race (who won)
+  ui/           VisualizerFrame (window/controller), AlgorithmView (one algorithm), ArrayPanel, PseudocodePanel
   web/          WebServer (JSON API + serves web/index.html)
 test/visualizer/AlgorithmTest.java
 web/index.html
@@ -97,24 +107,30 @@ Algorithm (abstract, Template Method: run() -> execute())
      |- LinearSearch, BinarySearch, JumpSearch
      '- InterpolationSearch, ExponentialSearch
 
-AlgorithmFactory (Factory + registry)     Step, Role (model)     VisualizerFrame / WebServer (views)
+AlgorithmFactory (Factory + registry)     Step, Role, ArrayModel (model)
+
+Player ----notifies----> PlaybackListener (interface, Observer pattern)
+                           '- AlgorithmView (bars + counters + PseudocodePanel)
+VisualizerFrame: 1 Player + 1 AlgorithmView, or 2 of each in race mode, one shared clock
+WebServer: same Algorithm classes, sends steps + pseudocode as JSON to web/index.html
 ```
 
 | OOP idea | Where |
 | --- | --- |
-| Abstraction | `Algorithm` declares `execute()`; the views only use the `Algorithm` type |
+| Abstraction | `Algorithm` declares `execute()` and `pseudocode()`; the views only use the `Algorithm` type |
 | Encapsulation | All fields in `Algorithm` are private, changed only through protected helpers; `Step` is immutable; `run()` returns a read-only list |
 | Inheritance | Three levels: `Algorithm` → `SortingAlgorithm` → `DistributionSort` → `RadixSort` |
 | Polymorphism | `needsTarget()` and `complexity()` are overridden; the GUI never checks which algorithm it has |
-| Interface | `PivotStrategy` with three implementations; `PivotStrategy.Less` is a functional interface |
+| Interface | `PivotStrategy` with three implementations; `PlaybackListener` implemented by `AlgorithmView`; `PivotStrategy.Less` is a functional interface |
 | Composition | `QuickSort` has a `PivotStrategy` instead of three QuickSort subclasses |
-| Design patterns | Template Method, Strategy, Factory, Builder (`frame(...).mark(...).save()`), MVC-style split |
+| Design patterns | Template Method, Strategy, Factory, Observer (`Player` → `PlaybackListener`), Builder (`frame(...).at(line).mark(...).save()`), MVC-style split |
 | Exceptions | `IllegalArgumentException` for unknown names, unsorted input to a search, bad sizes |
 
 ## Add your own algorithm
 
 1. Create a class in `algorithms/sorting` extending `SortingAlgorithm` (or in `algorithms/searching` extending `SearchingAlgorithm`).
-2. Pass its name and complexities to `super(...)` and implement `execute(int[] a, int target)`.
-   Change `a` with `swap`/`write`, compare with `less` (or `compare` for searches), and call
-   `frame(a, "message").mark(Role.COMPARE, i, j).save()` after each action.
+2. Pass its name and complexities to `super(...)`, return your pseudocode lines from `pseudocode()`,
+   and implement `execute(int[] a, int target)`. Change `a` with `swap`/`write`, compare with `less`
+   (or `compare` for searches), and call `frame(a, "message").at(line).mark(Role.COMPARE, i, j).save()`
+   after each action, where `line` is the 1-based pseudocode line it belongs to.
 3. Add `add(MyAlgorithm::new);` in `AlgorithmFactory`. It appears in both views and in the tests automatically.

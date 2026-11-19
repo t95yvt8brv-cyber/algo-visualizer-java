@@ -8,6 +8,8 @@ import visualizer.algorithms.AlgorithmFactory;
 import visualizer.model.ArrayModel;
 import visualizer.model.Role;
 import visualizer.model.Step;
+import visualizer.playback.Player;
+import visualizer.playback.Race;
 
 /** Plain-Java tests (no JUnit needed). Run with:  java -cp out visualizer.AlgorithmTest */
 public class AlgorithmTest {
@@ -33,6 +35,9 @@ public class AlgorithmTest {
         searchCases();
         countingCases();
         designCases();
+        pseudocodeCases();
+        playerCases();
+        raceCases();
 
         System.out.println(failures == 0
                 ? "All " + checks + " checks passed (" + sorts + " sorts, " + searches + " searches)."
@@ -152,6 +157,74 @@ public class AlgorithmTest {
         check(rejects(() -> AlgorithmFactory.create("No Such Sort")), "unknown names must throw IllegalArgumentException");
         check(rejects(() -> AlgorithmFactory.create("Binary Search").run(new int[] {3, 1, 2}, 1)),
                 "binary search on unsorted data must throw IllegalArgumentException");
+    }
+
+    /** Every frame points at a real pseudocode line; only a sort's final "Sorted!" frame may have none. */
+    private static void pseudocodeCases() {
+        ArrayModel model = new ArrayModel();
+        Random random = new Random(3);
+        for (String name : AlgorithmFactory.names()) {
+            Algorithm algo = AlgorithmFactory.create(name);
+            List<String> code = algo.pseudocode();
+            check(!code.isEmpty(), name + " has no pseudocode");
+            for (ArrayModel.Kind kind : ArrayModel.Kind.values()) {
+                model.generate(kind, 5 + random.nextInt(60));
+                int[] data = model.copy();
+                if (algo.needsSorted()) Arrays.sort(data);
+                int target = random.nextBoolean() ? data[0] : 1000;
+                List<Step> steps = AlgorithmFactory.create(name).run(data, target);
+                for (int i = 0; i < steps.size(); i++) {
+                    int line = steps.get(i).getLine();
+                    boolean finalSortFrame = !algo.needsTarget() && i == steps.size() - 1;
+                    if (line < (finalSortFrame ? 0 : 1) || line > code.size()) {
+                        check(false, name + ": frame " + i + " points at line " + line + " of " + code.size());
+                        break;
+                    }
+                }
+            }
+        }
+        // Exponential search reuses binary search, so its last six lines must match binary search's.
+        List<String> binary = AlgorithmFactory.create("Binary Search").pseudocode();
+        List<String> exponential = AlgorithmFactory.create("Exponential Search").pseudocode();
+        check(binary.subList(1, 7).equals(exponential.subList(5, 11)), "exponential search's binary block is out of sync");
+        check(AlgorithmFactory.create("Quick Sort (median of 3)").pseudocode().get(2).contains("median"),
+                "the pivot strategy should supply its own pseudocode line");
+    }
+
+    /** Player: moves, bounds, and notifies its listeners (Observer). */
+    private static void playerCases() {
+        Player player = new Player(AlgorithmFactory.create("Insertion Sort"), new int[] {3, 1, 2}, 0);
+        int[] calls = {0};
+        player.addListener(p -> calls[0]++);
+        check(calls[0] == 1, "a new listener should be told the current frame straight away");
+        check(player.isAtStart() && player.position() == 0, "a player starts before the first step");
+        check(!player.previous(), "previous() at the start should do nothing");
+        int moves = 0;
+        while (player.next()) moves++;
+        check(moves == player.length() && player.isFinished(), "next() should reach every step and then stop");
+        check(Arrays.equals(player.current().getData(), new int[] {1, 2, 3}), "the last frame should be sorted");
+        check(calls[0] == 1 + moves, "every move should notify the listener once");
+        player.seek(2);
+        check(player.position() == 2, "seek(2) should show step 2");
+        player.seek(1000);
+        check(player.isFinished(), "seeking past the end should stay on the last step");
+        player.rewind();
+        check(player.isAtStart(), "rewind() should go back to the start");
+    }
+
+    /** Race: same input, fewer steps wins. */
+    private static void raceCases() {
+        int[] reversed = new int[40];
+        for (int i = 0; i < 40; i++) reversed[i] = 40 - i;
+        Player bubble = new Player(AlgorithmFactory.create("Bubble Sort"), reversed, 0);
+        Player merge = new Player(AlgorithmFactory.create("Merge Sort"), reversed, 0);
+        List<Player> race = List.of(bubble, merge);
+        check(Race.result(race).startsWith("Race:"), "before anyone finishes the race is still on");
+        merge.seek(merge.length());
+        check(Race.result(race).startsWith("Merge Sort finished first"), "the faster sort should finish first");
+        bubble.seek(bubble.length());
+        check(Race.result(race).startsWith("Merge Sort wins"), "merge sort should beat bubble sort on reversed data");
+        check(Race.result(List.of(bubble)).isEmpty(), "a single player is not a race");
     }
 
     /** True if the action is refused with IllegalArgumentException or UnsupportedOperationException. */

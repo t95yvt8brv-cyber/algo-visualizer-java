@@ -48,8 +48,11 @@ public abstract class Algorithm {
         return Collections.unmodifiableList(steps);
     }
 
-    /** The algorithm itself. Change `a` in place and call frame(...).save() after each action. */
+    /** The algorithm itself. Change `a` in place and call frame(...).at(line).save() after each action. */
     protected abstract void execute(int[] a, int target);
+
+    /** The pseudocode shown next to the bars. Frame.at(n) highlights line n (1-based). */
+    public abstract List<String> pseudocode();
 
     // ---------- public information ----------
     public String getName()      { return name; }
@@ -82,16 +85,23 @@ public abstract class Algorithm {
     // ---------- frame builder ----------
     protected final Frame frame(int[] a, String note) { return new Frame(a, note); }
 
-    /** Builds one Step: copy of the array + persistent roles + extra marks for this moment. */
+    /** Builds one Step: copy of the array + persistent roles + extra marks + pseudocode line. */
     protected final class Frame {
         private final int[] data;
         private final Role[] marks;
         private final String note;
+        private int line;
 
         private Frame(int[] a, String note) {
             this.data = a.clone();
             this.marks = roles.clone();
             this.note = note;
+        }
+
+        /** The pseudocode line (1-based) this frame belongs to. */
+        public Frame at(int line) {
+            this.line = line;
+            return this;
         }
 
         public Frame mark(Role role, int... indices) {
@@ -106,7 +116,7 @@ public abstract class Algorithm {
         }
 
         public void save() {
-            if (recording) steps.add(new Step(data, marks, note, comparisons, writes));
+            if (recording) steps.add(new Step(data, marks, note, comparisons, writes, line));
         }
     }
 }

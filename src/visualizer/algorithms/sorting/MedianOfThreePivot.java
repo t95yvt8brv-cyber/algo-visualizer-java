@@ -15,4 +15,5 @@ public class MedianOfThreePivot implements PivotStrategy {
     }
 
     @Override public String label() { return "median of 3"; }
+    @Override public String rule() { return "p = index of median(a[lo], a[mid], a[hi])"; }
 }

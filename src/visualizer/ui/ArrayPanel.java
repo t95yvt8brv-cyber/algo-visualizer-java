@@ -27,8 +27,8 @@ public class ArrayPanel extends JPanel {
 
     private transient Step step;
 
-    public ArrayPanel() {
-        setPreferredSize(new Dimension(1000, 380));
+    public ArrayPanel(int preferredHeight) {
+        setPreferredSize(new Dimension(720, preferredHeight));
         setBackground(Color.WHITE);
     }
 

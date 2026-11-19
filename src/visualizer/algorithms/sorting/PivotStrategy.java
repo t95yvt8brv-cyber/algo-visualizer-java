@@ -17,4 +17,7 @@ public interface PivotStrategy {
 
     /** Short label shown in the algorithm's name. */
     String label();
+
+    /** The pivot line of Quick Sort's pseudocode, e.g. "p = hi". */
+    String rule();
 }

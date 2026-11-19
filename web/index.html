@@ -8,47 +8,67 @@
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #dde1e8;
     --normal: #4c78a8; --compare: #f2cf5b; --swap: #e45756; --pivot: #b279a2;
-    --sorted: #54a24b; --range: #9ecae9; --accent: #2f5d8a;
+    --sorted: #54a24b; --range: #9ecae9; --accent: #2f5d8a; --hl: #fff1b8; --hl-ink: #1d2330;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #14171d; --panel: #1c2028; --ink: #e6e9ef; --muted: #98a1b2; --line: #2c323d; --accent: #7fb0e0; }
+    :root { --bg: #14171d; --panel: #1c2028; --ink: #e6e9ef; --muted: #98a1b2; --line: #2c323d;
+            --accent: #7fb0e0; --hl: #5a4a12; --hl-ink: #fff6d6; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 32px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 32px; }
   h1 { font-size: 20px; margin: 0 0 2px; }
   .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
   .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel);
               border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
   label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
   select, input[type=number] { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px;
-              background: var(--bg); color: var(--ink); }
+              background: var(--bg); color: var(--ink); max-width: 100%; }
   input[type=number] { width: 80px; }
-  input[type=range] { width: 120px; }
+  input[type=range] { width: 110px; }
   .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
   button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg);
            color: var(--ink); cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 84px; }
   button:disabled { opacity: .45; cursor: default; }
-  .stage { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-  canvas { width: 100%; height: 380px; display: block; }
-  .info { display: grid; gap: 4px; margin-top: 12px; }
-  .complexity { font-weight: 600; }
-  .stats { font-variant-numeric: tabular-nums; color: var(--muted); white-space: pre; }
-  .note { min-height: 1.4em; }
-  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+  .status { margin: 12px 2px 0; font-weight: 600; min-height: 1.4em; }
+  .status .win { color: var(--sorted); }
+  .views { display: grid; gap: 12px; margin-top: 10px; }
+  .view { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .view h2 { font-size: 15px; margin: 0; }
+  .view .cx { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) 450px; gap: 12px; }
+  canvas { width: 100%; height: 340px; display: block; }
+  .race canvas { height: 200px; }
+  .stats { font-variant-numeric: tabular-nums; color: var(--muted); white-space: pre-wrap; font-size: 13px; margin-top: 6px; }
+  .note { min-height: 1.4em; font-size: 14px; }
+  ol.code { margin: 0; padding: 6px 0; list-style: none; counter-reset: ln; background: var(--bg);
+            border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: 340px;
+            font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .race ol.code { max-height: 200px; }
+  ol.code li { counter-increment: ln; white-space: pre; padding: 0 10px; color: var(--muted); }
+  ol.code li::before { content: counter(ln); display: inline-block; width: 2.2em; opacity: .55; }
+  ol.code li.on { background: var(--hl); color: var(--hl-ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--muted); }
   .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 2px;
                          margin-right: 5px; vertical-align: -1px; background: var(--c); }
   .error { color: var(--swap); }
+  @media (max-width: 760px) {
+    .body { grid-template-columns: 1fr; }
+    canvas, .race canvas { height: 200px; }
+  }
 </style>
 </head>
 <body>
 <main>
   <h1>Algorithm Visualizer</h1>
-  <p class="sub">The steps are recorded by the Java classes (<code>Algorithm.run()</code>) and played back here.</p>
+  <p class="sub">The steps and pseudocode come from the Java classes (<code>Algorithm.run()</code>) and are played back here.
+     Pick a second algorithm under "Race against" to run both on the same array.</p>
 
   <div class="controls">
     <label>Algorithm <select id="algo"></select></label>
+    <label>Race against <select id="vs"></select></label>
     <label>Array type <select id="kind"></select></label>
     <label>Size <span><input id="size" type="range" min="5" max="100" value="30"> <b id="sizeVal">30</b></span></label>
     <label>Speed <input id="speed" type="range" min="1" max="100" value="40"></label>
@@ -62,18 +82,14 @@
     </div>
   </div>
 
-  <div class="stage"><canvas id="canvas"></canvas></div>
+  <div class="status" id="status"></div>
+  <div class="views" id="views"></div>
 
-  <div class="info">
-    <div class="complexity" id="complexity"></div>
-    <div class="stats" id="stats"></div>
-    <div class="note" id="note"></div>
-  </div>
   <div class="legend">
     <span style="--c:var(--normal)">Normal</span>
     <span style="--c:var(--compare)">Being compared</span>
     <span style="--c:var(--swap)">Swap / write</span>
-    <span style="--c:var(--pivot)">Pivot / middle</span>
+    <span style="--c:var(--pivot)">Pivot / middle / heap parent</span>
     <span style="--c:var(--range)">Active range</span>
     <span style="--c:var(--sorted)">Sorted / found</span>
   </div>
@@ -83,94 +99,155 @@
 // Role ordinals, same order as Role.java: NORMAL, COMPARE, SWAP, PIVOT, SORTED, FOUND, RANGE
 const ROLE_VARS = ["--normal", "--compare", "--swap", "--pivot", "--sorted", "--sorted", "--range"];
 const $ = id => document.getElementById(id);
-let algos = [], run = null, index = -1, timer = null;
+let algos = [], data = null, views = [], time = 0, timer = null;
 
 async function init() {
-  const res = await fetch("/api/algorithms");
-  const meta = await res.json();
+  const meta = await (await fetch("/api/algorithms")).json();
   algos = meta.algorithms;
   for (const a of algos) $("algo").add(new Option(a.name, a.name));
   for (const k of meta.kinds) $("kind").add(new Option(k.label, k.id));
-  $("algo").onchange = () => load(true);
-  $("kind").onchange = () => load(false);
+  // Optional link parameters, e.g. ?algo=Bubble Sort&vs=Merge Sort&kind=REVERSED&size=40
+  const url = new URLSearchParams(location.search);
+  const pick = (id, value) => { if (value && [...$(id).options].some(o => o.value === value)) $(id).value = value; };
+  pick("algo", url.get("algo"));
+  pick("kind", url.get("kind"));
+  if (url.get("size")) { $("size").value = url.get("size"); $("sizeVal").textContent = $("size").value; }
+  fillVs();
+  pick("vs", url.get("vs"));
+  $("algo").onchange = () => { fillVs(); load(); };
+  $("vs").onchange = load;
+  $("kind").onchange = load;
   $("size").oninput = () => { $("sizeVal").textContent = $("size").value; };
-  $("size").onchange = () => load(false);
-  $("target").onchange = () => load(true);
+  $("size").onchange = load;
+  $("target").oninput = load;
   $("speed").oninput = () => { if (timer) { stop(); play(); } };
   $("start").onclick = startPause;
-  $("next").onclick = () => { stop(); go(index + 1); };
-  $("prev").onclick = () => { stop(); go(index - 1); };
-  $("reset").onclick = () => { stop(); go(-1); $("start").textContent = "Start"; };
-  $("fresh").onclick = () => load(false);
-  window.onresize = draw;
-  load(false);
+  $("next").onclick = () => { stop(); $("start").textContent = "Resume"; seek(time + 1); };
+  $("prev").onclick = () => { stop(); $("start").textContent = "Resume"; seek(time - 1); };
+  $("reset").onclick = () => { stop(); seek(0); $("start").textContent = "Start"; };
+  $("fresh").onclick = load;
+  window.onresize = () => views.forEach(drawView);
+  load();
 }
 
-// The server generates a fresh array on every request.
-async function load(keepArray) {
+// "Race against" only offers algorithms of the same kind (sort vs sort, search vs search).
+function fillVs() {
+  const first = algos.find(a => a.name === $("algo").value), keep = $("vs").value;
+  $("vs").length = 0;
+  $("vs").add(new Option("(no race)", ""));
+  for (const a of algos) if (a.name !== first.name && a.needsTarget === first.needsTarget) $("vs").add(new Option(a.name, a.name));
+  if ([...$("vs").options].some(o => o.value === keep)) $("vs").value = keep;
+}
+
+let loadId = 0;
+async function load() {
   stop();
-  const a = algos.find(x => x.name === $("algo").value);
-  $("target").disabled = !a.needsTarget;
-  const p = new URLSearchParams({ algo: a.name, kind: $("kind").value, size: $("size").value, target: $("target").value });
+  const id = ++loadId;
+  const first = algos.find(a => a.name === $("algo").value);
+  $("target").disabled = !first.needsTarget;
+  const p = new URLSearchParams({ algo: first.name, vs: $("vs").value, kind: $("kind").value,
+                                  size: $("size").value, target: $("target").value });
   const res = await fetch("/api/run?" + p);
   const body = await res.json();
-  if (!res.ok) { $("note").innerHTML = '<span class="error">' + body.error + "</span>"; return; }
-  run = body;
-  $("complexity").textContent = run.name + ":  " + run.complexity + (run.target !== null ? "   (target " + run.target + ")" : "");
+  if (id !== loadId) return;                       // a newer request has started
+  if (!res.ok) { $("status").innerHTML = '<span class="error">' + body.error + "</span>"; return; }
+  data = body;
+  buildViews();
   $("start").textContent = "Start";
-  go(-1);
+  seek(0);
 }
 
-function go(i) {
-  if (!run) return;
-  index = Math.max(-1, Math.min(run.steps.length - 1, i));
-  draw();
-  const s = index >= 0 ? run.steps[index] : null;
-  $("stats").textContent = "Comparisons: " + (s ? s.c : 0) + "    Writes: " + (s ? s.w : 0)
-                         + "    Step " + (index + 1) + " / " + run.steps.length;
-  $("note").textContent = s ? s.n : "Press Start";
-  $("prev").disabled = index < 0;
-  $("next").disabled = index >= run.steps.length - 1;
+function buildViews() {
+  const box = $("views");
+  box.innerHTML = "";
+  box.classList.toggle("race", data.runs.length > 1);
+  views = data.runs.map(run => {
+    const el = document.createElement("section");
+    el.className = "view";
+    el.innerHTML = '<h2></h2><p class="cx"></p><div class="body"><div><canvas></canvas>'
+                 + '<div class="stats"></div><div class="note"></div></div><ol class="code"></ol></div>';
+    el.querySelector("h2").textContent = run.name;
+    el.querySelector(".cx").textContent = run.complexity;
+    const ol = el.querySelector("ol");
+    for (const line of run.code) { const li = document.createElement("li"); li.textContent = line; ol.append(li); }
+    box.append(el);
+    return { run, el, canvas: el.querySelector("canvas"), lines: [...ol.children], index: -1 };
+  });
+}
+
+// One shared clock: each view shows frame min(time, its length).
+const longest = () => Math.max(...views.map(v => v.run.steps.length));
+const finished = () => time >= longest();
+
+function seek(t) {
+  if (!data) return;
+  time = Math.max(0, Math.min(longest(), t));
+  for (const v of views) {
+    v.index = Math.min(time, v.run.steps.length) - 1;
+    const s = v.index >= 0 ? v.run.steps[v.index] : null, done = v.index === v.run.steps.length - 1;
+    drawView(v);
+    v.el.querySelector(".stats").textContent = "Comparisons: " + (s ? s.c : 0) + "    Writes: " + (s ? s.w : 0)
+        + "    Step " + (v.index + 1) + " / " + v.run.steps.length + (done ? "    (done)" : "");
+    v.el.querySelector(".note").textContent = s ? s.n : "Press Start";
+    v.lines.forEach((li, i) => li.classList.toggle("on", s !== null && s.l === i + 1));
+    const on = v.lines[s ? s.l - 1 : -1];
+    if (on) on.scrollIntoView({ block: "nearest" });
+  }
+  $("prev").disabled = time <= 0;
+  $("next").disabled = finished();
+  $("status").innerHTML = status();
+}
+
+// Same rule as Race.java: fewer steps finishes first; ties go to less work (comparisons + writes).
+function status() {
+  let text = data.target !== null ? "Target: " + data.target + "&nbsp;&nbsp;&nbsp; " : "";
+  if (views.length < 2) return text;
+  const [a, b] = views, doneA = a.index === a.run.steps.length - 1, doneB = b.index === b.run.steps.length - 1;
+  const last = v => v.run.steps[v.run.steps.length - 1], work = v => last(v).c + last(v).w;
+  if (!doneA && !doneB) return text + "Race: " + a.run.name + " vs " + b.run.name;
+  if (doneA !== doneB) return text + (doneA ? a : b).run.name + " finished first, after " + (doneA ? a : b).run.steps.length + " steps";
+  const order = (a.run.steps.length - b.run.steps.length) || (work(a) - work(b));
+  const detail = a.run.steps.length + " vs " + b.run.steps.length + " steps, " + last(a).c + " vs " + last(b).c
+               + " comparisons, " + last(a).w + " vs " + last(b).w + " writes";
+  if (order === 0) return text + "Tie (" + detail + ")";
+  return text + '<span class="win">' + (order < 0 ? a : b).run.name + " wins</span> (" + detail + ")";
 }
 
 function startPause() {
   if (timer) { stop(); $("start").textContent = "Resume"; return; }
-  if (index >= run.steps.length - 1) go(-1);
+  if (finished()) seek(0);
   play();
 }
 function play() {
   $("start").textContent = "Pause";
   timer = setInterval(() => {
-    if (index >= run.steps.length - 1) { stop(); $("start").textContent = "Start"; return; }
-    go(index + 1);
+    if (finished()) { stop(); $("start").textContent = "Start"; return; }
+    seek(time + 1);
   }, Math.max(1, 600 / $("speed").value));
 }
 function stop() { clearInterval(timer); timer = null; }
 
-function draw() {
-  const c = $("canvas"), dpr = window.devicePixelRatio || 1;
+function drawView(v) {
+  const c = v.canvas, dpr = window.devicePixelRatio || 1;
   c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
   const g = c.getContext("2d"); g.scale(dpr, dpr);
   const W = c.clientWidth, H = c.clientHeight;
   g.clearRect(0, 0, W, H);
-  if (!run) return;
-  const s = index >= 0 ? run.steps[index] : null;
-  const data = s ? s.d : run.start, n = data.length;
+  const s = v.index >= 0 ? v.run.steps[v.index] : null;
+  const arr = s ? s.d : data.start, n = arr.length;
   const css = getComputedStyle(document.documentElement);
-  const colours = ROLE_VARS.map(v => css.getPropertyValue(v).trim());
-  const max = Math.max(1, ...data), bw = W / n, labels = n <= 30, usable = H - (labels ? 26 : 6);
+  const colours = ROLE_VARS.map(x => css.getPropertyValue(x).trim());
+  const max = Math.max(1, ...arr), bw = W / n, labels = n <= 30 && bw >= 14, usable = H - (labels ? 22 : 4);
+  g.font = "11px system-ui"; g.textAlign = "center";
   for (let i = 0; i < n; i++) {
-    const h = data[i] / max * usable, x = i * bw;
+    const h = arr[i] / max * usable, x = i * bw;
     g.fillStyle = colours[s ? +s.r[i] : 0];
     g.fillRect(x + 1, usable - h + 2, Math.max(1, bw - 2), h);
-    if (labels) {
-      g.fillStyle = css.getPropertyValue("--muted"); g.font = "11px system-ui"; g.textAlign = "center";
-      g.fillText(data[i], x + bw / 2, H - 8);
-    }
+    if (labels) { g.fillStyle = css.getPropertyValue("--muted"); g.fillText(arr[i], x + bw / 2, H - 6); }
   }
 }
 
-init().catch(e => { $("note").innerHTML = '<span class="error">Could not reach the Java server: ' + e + "</span>"; });
+init().catch(e => { $("status").innerHTML = '<span class="error">Could not reach the Java server: ' + e + "</span>"; });
 </script>
 </body>
 </html>

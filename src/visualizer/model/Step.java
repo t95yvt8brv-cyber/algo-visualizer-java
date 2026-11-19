@@ -1,8 +1,8 @@
 package visualizer.model;
 
 /**
- * One recorded animation frame: a snapshot of the array, a role per element, a message and the
- * running counts. Immutable: the arrays are copied on the way in and on the way out, so nobody
+ * One recorded animation frame: a snapshot of the array, a role per element, a message, the
+ * running counts and the pseudocode line being run (0 = none). Immutable: the arrays are copied on the way in and on the way out, so nobody
  * can change a frame after it has been recorded (encapsulation).
  */
 public final class Step {
@@ -11,8 +11,9 @@ public final class Step {
     private final String note;
     private final int comparisons;
     private final int writes;
+    private final int line;
 
-    public Step(int[] data, Role[] roles, String note, int comparisons, int writes) {
+    public Step(int[] data, Role[] roles, String note, int comparisons, int writes, int line) {
         if (data.length != roles.length) {
             throw new IllegalArgumentException("data and roles must have the same length");
         }
@@ -21,6 +22,7 @@ public final class Step {
         this.note = note;
         this.comparisons = comparisons;
         this.writes = writes;
+        this.line = line;
     }
 
     public int size()            { return data.length; }
@@ -31,4 +33,5 @@ public final class Step {
     public String getNote()      { return note; }
     public int getComparisons()  { return comparisons; }
     public int getWrites()       { return writes; }
+    public int getLine()         { return line; }
 }
