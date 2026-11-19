@@ -25,6 +25,9 @@
   select, input[type=number] { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px;
               background: var(--bg); color: var(--ink); max-width: 100%; }
   input[type=number] { width: 80px; }
+  input[type=text] { font: inherit; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px;
+              background: var(--bg); color: var(--ink); width: 230px; max-width: 100%; }
+  .values { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; }
   input[type=range] { width: 110px; }
   .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
   button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg);
@@ -80,6 +83,11 @@
       <button id="reset">Reset</button>
       <button id="fresh">New array</button>
     </div>
+    <div class="values">
+      <label>Your values <input id="values" type="text" placeholder="e.g. 5, 3, 8, 1"
+             title="2 to 100 whole numbers from 0 to 999, separated by commas or spaces"></label>
+      <button id="use">Use values</button>
+    </div>
   </div>
 
   <div class="status" id="status"></div>
@@ -106,29 +114,35 @@ async function init() {
   algos = meta.algorithms;
   for (const a of algos) $("algo").add(new Option(a.name, a.name));
   for (const k of meta.kinds) $("kind").add(new Option(k.label, k.id));
-  // Optional link parameters, e.g. ?algo=Bubble Sort&vs=Merge Sort&kind=REVERSED&size=40
+  // Optional link parameters, e.g. ?algo=Bubble Sort&vs=Merge Sort&kind=REVERSED&size=40 or &values=5,3,8,1
   const url = new URLSearchParams(location.search);
   const pick = (id, value) => { if (value && [...$(id).options].some(o => o.value === value)) $(id).value = value; };
   pick("algo", url.get("algo"));
   pick("kind", url.get("kind"));
+  if (url.get("values")) $("values").value = url.get("values");
   if (url.get("size")) { $("size").value = url.get("size"); $("sizeVal").textContent = $("size").value; }
   fillVs();
   pick("vs", url.get("vs"));
   $("algo").onchange = () => { fillVs(); load(); };
   $("vs").onchange = load;
-  $("kind").onchange = load;
+  $("kind").onchange = generated;
   $("size").oninput = () => { $("sizeVal").textContent = $("size").value; };
-  $("size").onchange = load;
+  $("size").onchange = generated;
   $("target").oninput = load;
   $("speed").oninput = () => { if (timer) { stop(); play(); } };
   $("start").onclick = startPause;
   $("next").onclick = () => { stop(); $("start").textContent = "Resume"; seek(time + 1); };
   $("prev").onclick = () => { stop(); $("start").textContent = "Resume"; seek(time - 1); };
   $("reset").onclick = () => { stop(); seek(0); $("start").textContent = "Start"; };
-  $("fresh").onclick = load;
+  $("fresh").onclick = generated;
+  $("use").onclick = load;
+  $("values").onkeydown = e => { if (e.key === "Enter") load(); };
   window.onresize = () => views.forEach(drawView);
   load();
 }
+
+// Array type, size and "New array" switch back from typed values to a generated array.
+function generated() { $("values").value = ""; load(); }
 
 // "Race against" only offers algorithms of the same kind (sort vs sort, search vs search).
 function fillVs() {
@@ -146,7 +160,7 @@ async function load() {
   const first = algos.find(a => a.name === $("algo").value);
   $("target").disabled = !first.needsTarget;
   const p = new URLSearchParams({ algo: first.name, vs: $("vs").value, kind: $("kind").value,
-                                  size: $("size").value, target: $("target").value });
+                                  size: $("size").value, target: $("target").value, values: $("values").value });
   const res = await fetch("/api/run?" + p);
   const body = await res.json();
   if (id !== loadId) return;                       // a newer request has started
@@ -240,7 +254,7 @@ function drawView(v) {
   const max = Math.max(1, ...arr), bw = W / n, labels = n <= 30 && bw >= 14, usable = H - (labels ? 22 : 4);
   g.font = "11px system-ui"; g.textAlign = "center";
   for (let i = 0; i < n; i++) {
-    const h = arr[i] / max * usable, x = i * bw;
+    const h = Math.max(2, arr[i] / max * usable), x = i * bw;     // 0 still shows a sliver
     g.fillStyle = colours[s ? +s.r[i] : 0];
     g.fillRect(x + 1, usable - h + 2, Math.max(1, bw - 2), h);
     if (labels) { g.fillStyle = css.getPropertyValue("--muted"); g.fillText(arr[i], x + bw / 2, H - 6); }

@@ -65,6 +65,7 @@ public class WebServer {
     /**
      * GET /api/run?algo=Merge%20Sort&vs=Heap%20Sort&kind=RANDOM&size=30&target=12
      * Records one algorithm, or two on the same array when `vs` is given (race mode).
+     * `values=5,3,8,1` uses the user's own numbers instead of a generated array.
      */
     private static void run(HttpExchange ex) throws IOException {
         try {
@@ -78,9 +79,14 @@ public class WebServer {
                 if (a.needsTarget() != search) throw new IllegalArgumentException("A race needs two sorts or two searches");
             }
 
-            int size = Math.max(5, Math.min(100, Integer.parseInt(q.getOrDefault("size", "30"))));
             ArrayModel model = new ArrayModel();
-            model.generate(ArrayModel.Kind.valueOf(q.getOrDefault("kind", "RANDOM")), size);
+            String values = q.getOrDefault("values", "").trim();
+            if (!values.isEmpty()) {
+                model.setValues(ArrayModel.parse(values));              // the user's own numbers
+            } else {
+                int size = Math.max(5, Math.min(100, Integer.parseInt(q.getOrDefault("size", "30"))));
+                model.generate(ArrayModel.Kind.valueOf(q.getOrDefault("kind", "RANDOM")), size);
+            }
             int[] data = model.copy();
             if (algos.stream().anyMatch(Algorithm::needsSorted)) Arrays.sort(data);   // same input for both
 

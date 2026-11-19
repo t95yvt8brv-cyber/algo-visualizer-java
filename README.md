@@ -62,13 +62,14 @@ All searches except Linear Search run on a sorted copy of the array.
 | Start / Pause / Resume | Plays the recorded steps |
 | Prev / Next | Step backwards or forwards one frame |
 | Reset / New array | Replay the same recording from the start, or generate a new array |
+| Your values + Use values | Sort or search your own numbers, e.g. `5, 3, 8, 1` (2 to 100 whole numbers from 0 to 999, commas or spaces). Enter also works. Mistakes are shown in red. Changing the array type or size, or New array, goes back to generated arrays. |
 
 The pseudocode panel next to the bars highlights the line each frame belongs to.
 In a race both algorithms share one clock, so the one with fewer steps finishes first; the bar at the
 bottom announces the winner with its step, comparison and write counts.
 
 The browser version has the same features, and its URL can preselect a race, for example
-`http://localhost:8080/?algo=Bubble%20Sort&vs=Merge%20Sort&kind=REVERSED&size=40`.
+`http://localhost:8080/?algo=Bubble%20Sort&vs=Merge%20Sort&kind=REVERSED&size=40`, or with your own numbers `...&values=5,3,8,1`.
 
 Colours: yellow = being compared, red = swap or write, purple = pivot, middle or heap parent,
 light blue = active range, green = sorted or found.
@@ -124,7 +125,7 @@ WebServer: same Algorithm classes, sends steps + pseudocode as JSON to web/index
 | Interface | `PivotStrategy` with three implementations; `PlaybackListener` implemented by `AlgorithmView`; `PivotStrategy.Less` is a functional interface |
 | Composition | `QuickSort` has a `PivotStrategy` instead of three QuickSort subclasses |
 | Design patterns | Template Method, Strategy, Factory, Observer (`Player` → `PlaybackListener`), Builder (`frame(...).at(line).mark(...).save()`), MVC-style split |
-| Exceptions | `IllegalArgumentException` for unknown names, unsorted input to a search, bad sizes |
+| Exceptions | `IllegalArgumentException` for unknown names, unsorted input to a search, and typed values that aren't valid; the GUI catches it and shows the message |
 
 ## Add your own algorithm
 

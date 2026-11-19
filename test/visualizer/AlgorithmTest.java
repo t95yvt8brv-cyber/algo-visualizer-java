@@ -38,6 +38,7 @@ public class AlgorithmTest {
         pseudocodeCases();
         playerCases();
         raceCases();
+        customValueCases();
 
         System.out.println(failures == 0
                 ? "All " + checks + " checks passed (" + sorts + " sorts, " + searches + " searches)."
@@ -225,6 +226,44 @@ public class AlgorithmTest {
         bubble.seek(bubble.length());
         check(Race.result(race).startsWith("Merge Sort wins"), "merge sort should beat bubble sort on reversed data");
         check(Race.result(List.of(bubble)).isEmpty(), "a single player is not a race");
+    }
+
+    /** Values typed by the user: separators, limits, readable errors, and every algorithm runs on them. */
+    private static void customValueCases() {
+        check(Arrays.equals(ArrayModel.parse(" 5, 3 8,,1 "), new int[] {5, 3, 8, 1}), "commas and spaces should both separate values");
+        check(Arrays.equals(ArrayModel.parse("0 999"), new int[] {0, 999}), "0 and 999 are allowed");
+        check(message(() -> ArrayModel.parse("5, x, 3")).contains("\"x\" is not a whole number"), "a word should be reported");
+        check(message(() -> ArrayModel.parse("2.5 4")).contains("not a whole number"), "decimals should be refused");
+        check(message(() -> ArrayModel.parse("7")).contains("at least 2"), "one number is too few");
+        check(message(() -> ArrayModel.parse("   ")).contains("at least 2"), "an empty box should be refused");
+        check(message(() -> ArrayModel.parse("4 -1")).contains("between 0 and 999"), "negative numbers should be refused");
+        check(message(() -> ArrayModel.parse("4 1000")).contains("between 0 and 999"), "numbers above 999 should be refused");
+        StringBuilder many = new StringBuilder();
+        for (int i = 0; i < 101; i++) many.append(i).append(' ');
+        check(message(() -> ArrayModel.parse(many.toString())).contains("At most 100"), "more than 100 numbers should be refused");
+
+        ArrayModel model = new ArrayModel();
+        model.setValues(ArrayModel.parse("42, 7, 0, 999, 7, 13, 100, 7"));
+        for (String name : AlgorithmFactory.names()) {
+            Algorithm algo = AlgorithmFactory.create(name);
+            if (algo.needsTarget()) {
+                int[] data = model.copy();
+                Arrays.sort(data);
+                check(data[foundAt(name, data, 999)] == 999, name + " should find 999 in typed values");
+            } else {
+                checkSort(name, model.copy());
+            }
+        }
+    }
+
+    /** The message of the IllegalArgumentException the action throws, or "" if it doesn't throw. */
+    private static String message(Runnable action) {
+        try {
+            action.run();
+            return "";
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        }
     }
 
     /** True if the action is refused with IllegalArgumentException or UnsupportedOperationException. */

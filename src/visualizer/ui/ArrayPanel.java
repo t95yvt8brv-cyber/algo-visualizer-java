@@ -48,7 +48,7 @@ public class ArrayPanel extends JPanel {
         int usable = getHeight() - 40;
         g.setFont(LABEL_FONT);
         for (int i = 0; i < n; i++) {
-            int h = (int) ((double) step.valueAt(i) / max * usable);
+            int h = Math.max(2, (int) ((double) step.valueAt(i) / max * usable));   // 0 still shows a sliver
             int x = (int) (i * barWidth);
             g.setColor(COLOURS.get(step.roleAt(i)));
             g.fillRect(x + 1, getHeight() - h - 20, Math.max(1, (int) barWidth - 2), h);

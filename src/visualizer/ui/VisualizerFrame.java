@@ -1,6 +1,7 @@
 package visualizer.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
@@ -44,6 +45,7 @@ public class VisualizerFrame extends JFrame {
     private final JSlider sizeSlider = new JSlider(5, 100, 30);
     private final JSlider speedSlider = new JSlider(1, 100, 40);
     private final JTextField targetField = new JTextField(4);
+    private final JTextField valuesField = new JTextField(18);
     private final JButton startButton = new JButton("Start");
     private final JPanel viewsPanel = new JPanel(new GridLayout(0, 1, 0, 4));
     private final JLabel statusLabel = new JLabel(" ");
@@ -55,6 +57,7 @@ public class VisualizerFrame extends JFrame {
     private int[] startData;
     private Integer target;                // null for sorts
     private boolean fillingRaceBox;
+    private String inputError;             // message for values the user typed wrongly, or null
 
     public VisualizerFrame() {
         super("Algorithm Visualizer");
@@ -88,6 +91,10 @@ public class VisualizerFrame extends JFrame {
         row2.add(button("Next", e -> step(+1)));
         row2.add(button("Reset", e -> rewind()));
         row2.add(button("New array", e -> newArray()));
+        row2.add(new JLabel("   Your values:"));
+        valuesField.setToolTipText("e.g. 5, 3, 8, 1  (2 to 100 whole numbers from 0 to 999)");
+        row2.add(valuesField);
+        row2.add(button("Use values", e -> useValues()));
         JPanel controls = new JPanel(new GridLayout(2, 1));
         controls.add(row1);
         controls.add(row2);
@@ -113,6 +120,7 @@ public class VisualizerFrame extends JFrame {
         sizeSlider.addChangeListener(e -> { if (!sizeSlider.getValueIsAdjusting()) newArray(); });
         speedSlider.addChangeListener(e -> timer.setDelay(delay()));
         startButton.addActionListener(e -> startPause());
+        valuesField.addActionListener(e -> useValues());            // Enter in the box
         // Re-record as soon as the target changes, so Start always searches for what is typed.
         targetField.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e)  { SwingUtilities.invokeLater(VisualizerFrame.this::reset); }
@@ -143,7 +151,20 @@ public class VisualizerFrame extends JFrame {
     // ---------- recording ----------
     void newArray() {
         model.generate((ArrayModel.Kind) kindBox.getSelectedItem(), sizeSlider.getValue());
+        inputError = null;
         reset();
+    }
+
+    /** Uses the numbers typed in the values box; a mistake is shown in the status bar. */
+    void useValues() {
+        try {
+            model.setValues(ArrayModel.parse(valuesField.getText()));
+            inputError = null;
+            reset();
+        } catch (IllegalArgumentException e) {
+            inputError = e.getMessage();
+            updateStatus();
+        }
     }
 
     /** Records the chosen algorithm(s) on the current array and shows the starting frame. */
@@ -247,6 +268,11 @@ public class VisualizerFrame extends JFrame {
     }
 
     private void updateStatus() {
+        statusLabel.setForeground(inputError == null ? Color.BLACK : new Color(0xc0392b));
+        if (inputError != null) {
+            statusLabel.setText(inputError);
+            return;
+        }
         String text = target == null ? "" : "Target: " + target + "      ";
         text += players.size() > 1 ? Race.result(players) : "";
         statusLabel.setText(text.isEmpty() ? " " : text);
@@ -255,4 +281,5 @@ public class VisualizerFrame extends JFrame {
     // ---------- used by tools that drive the window (e.g. screenshots) ----------
     void select(String algorithmName) { algoBox.setSelectedItem(algorithmName); }
     void race(String algorithmName)   { raceBox.setSelectedItem(algorithmName); }
+    void typeValues(String text)      { valuesField.setText(text); useValues(); }
 }
