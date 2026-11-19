@@ -1,19 +1,25 @@
+package visualizer.algorithms;
+
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import visualizer.model.Role;
+import visualizer.model.Step;
 
 /**
  * Abstract parent of every algorithm (abstraction).
  * Template Method pattern: run() does the set-up and returns the recorded steps,
  * subclasses only implement execute().
+ * All state is private; subclasses change it only through the protected helpers (encapsulation).
  */
 public abstract class Algorithm {
     private final String name, best, average, worst, space;
     private final boolean needsSorted;
 
-    protected int comparisons;      // statistics are encapsulated inside the object
-    protected int writes;
-    protected Role[] roles;         // roles that persist between frames (e.g. SORTED)
+    private int comparisons;
+    private int writes;
+    private Role[] roles;           // roles that persist between frames (e.g. SORTED)
     private boolean recording = true;
     private List<Step> steps;
 
@@ -27,21 +33,25 @@ public abstract class Algorithm {
         this.needsSorted = needsSorted;
     }
 
-    /** Runs the algorithm on a copy of the input and returns every recorded frame. */
+    /** Runs the algorithm on a copy of the input and returns every recorded frame (read-only). */
     public final List<Step> run(int[] input, int target) {
+        if (needsSorted && !isSorted(input)) {
+            throw new IllegalArgumentException(name + " needs a sorted array");
+        }
         int[] a = input.clone();
         comparisons = 0;
         writes = 0;
         roles = new Role[a.length];
         Arrays.fill(roles, Role.NORMAL);
-        steps = new ArrayList<Step>();
+        steps = new ArrayList<>();
         execute(a, target);
-        return steps;
+        return Collections.unmodifiableList(steps);
     }
 
     /** The algorithm itself. Change `a` in place and call frame(...).save() after each action. */
     protected abstract void execute(int[] a, int target);
 
+    // ---------- public information ----------
     public String getName()      { return name; }
     public int getComparisons()  { return comparisons; }
     public int getWrites()       { return writes; }
@@ -58,16 +68,27 @@ public abstract class Algorithm {
     @Override
     public String toString() { return name; }
 
+    // ---------- helpers for subclasses ----------
+    protected final void countComparison()        { comparisons++; }
+    protected final void countWrites(int count)   { writes += count; }
+    protected final void setRole(int i, Role role) { roles[i] = role; }
+    protected final void setAllRoles(Role role)   { Arrays.fill(roles, role); }
+
+    private static boolean isSorted(int[] a) {
+        for (int i = 1; i < a.length; i++) if (a[i - 1] > a[i]) return false;
+        return true;
+    }
+
     // ---------- frame builder ----------
-    protected Frame frame(int[] a, String note) { return new Frame(a, note); }
+    protected final Frame frame(int[] a, String note) { return new Frame(a, note); }
 
     /** Builds one Step: copy of the array + persistent roles + extra marks for this moment. */
-    protected class Frame {
+    protected final class Frame {
         private final int[] data;
         private final Role[] marks;
         private final String note;
 
-        Frame(int[] a, String note) {
+        private Frame(int[] a, String note) {
             this.data = a.clone();
             this.marks = roles.clone();
             this.note = note;

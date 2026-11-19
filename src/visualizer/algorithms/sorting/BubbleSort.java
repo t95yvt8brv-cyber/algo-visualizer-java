@@ -1,7 +1,13 @@
+package visualizer.algorithms.sorting;
+
+import visualizer.algorithms.SortingAlgorithm;
+import visualizer.model.Role;
+
+/** Repeatedly swaps neighbours that are out of order; the largest value bubbles to the end each pass. */
 public class BubbleSort extends SortingAlgorithm {
 
     public BubbleSort() {
-        super("Bubble Sort", "O(n)", "O(n^2)", "O(n^2)", "O(1)");
+        super("Bubble Sort", "O(n)", "O(n^2)", "O(n^2)", "O(1)", true);
     }
 
     @Override
@@ -17,7 +23,7 @@ public class BubbleSort extends SortingAlgorithm {
                     frame(a, "Swap").mark(Role.SWAP, j, j + 1).save();
                 }
             }
-            roles[n - 1 - i] = Role.SORTED;          // the largest value has bubbled to the end
+            setRole(n - 1 - i, Role.SORTED);         // the largest value has bubbled to the end
             if (!swapped) break;                     // no swaps in a whole pass: already sorted
         }
         finish(a);

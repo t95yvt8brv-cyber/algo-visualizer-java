@@ -1,3 +1,5 @@
+package visualizer.model;
+
 import java.util.Random;
 
 /** Owns the data being visualised, kept separate from the GUI (separation of concerns). */
@@ -14,7 +16,9 @@ public class ArrayModel {
     private final Random random = new Random();
     private int[] data = new int[0];
 
+    /** Fills the model with n values between 1 and n arranged as the given kind. */
     public void generate(Kind kind, int n) {
+        if (n < 1) throw new IllegalArgumentException("size must be at least 1");
         int[] d = new int[n];
         switch (kind) {
             case REVERSED:
@@ -40,5 +44,6 @@ public class ArrayModel {
         d[j] = t;
     }
 
+    public int size()   { return data.length; }
     public int[] copy() { return data.clone(); }
 }

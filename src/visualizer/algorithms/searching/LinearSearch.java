@@ -1,3 +1,9 @@
+package visualizer.algorithms.searching;
+
+import visualizer.algorithms.SearchingAlgorithm;
+import visualizer.model.Role;
+
+/** Checks every element from left to right. Works on unsorted data. */
 public class LinearSearch extends SearchingAlgorithm {
 
     public LinearSearch() {
@@ -7,13 +13,13 @@ public class LinearSearch extends SearchingAlgorithm {
     @Override
     protected void execute(int[] a, int target) {
         for (int i = 0; i < a.length; i++) {
-            comparisons++;
+            int c = compare(a[i], target);
             frame(a, "Is a[" + i + "] = " + a[i] + " equal to " + target + "?").mark(Role.COMPARE, i).save();
-            if (a[i] == target) {
-                frame(a, "Found " + target + " at index " + i).mark(Role.FOUND, i).save();
+            if (c == 0) {
+                found(a, i, target);
                 return;
             }
         }
-        frame(a, target + " is not in the array").save();
+        notFound(a, target);
     }
 }

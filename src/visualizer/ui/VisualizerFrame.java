@@ -1,13 +1,11 @@
+package visualizer.ui;
+
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.Graphics;
+import java.awt.event.ActionListener;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -17,28 +15,28 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import visualizer.algorithms.Algorithm;
+import visualizer.algorithms.AlgorithmFactory;
+import visualizer.model.ArrayModel;
+import visualizer.model.Role;
+import visualizer.model.Step;
 
 /**
- * The window. It only talks to the Algorithm interface, so it works with any algorithm
+ * The window. It only talks to the Algorithm type, so it works with any algorithm
  * without knowing which one it is (polymorphism). All steps are recorded first, then replayed,
  * which is what makes the Previous button possible.
  */
 public class VisualizerFrame extends JFrame {
-    private static final Map<Role, Color> COLOURS = new EnumMap<Role, Color>(Role.class);
-    static {
-        COLOURS.put(Role.NORMAL,  new Color(0x4c78a8));
-        COLOURS.put(Role.COMPARE, new Color(0xf2cf5b));
-        COLOURS.put(Role.SWAP,    new Color(0xe45756));
-        COLOURS.put(Role.PIVOT,   new Color(0xb279a2));
-        COLOURS.put(Role.SORTED,  new Color(0x54a24b));
-        COLOURS.put(Role.FOUND,   new Color(0x54a24b));
-        COLOURS.put(Role.RANGE,   new Color(0x9ecae9));
-    }
+    private static final long serialVersionUID = 1L;
 
-    private final ArrayModel model = new ArrayModel();
+    private final transient ArrayModel model = new ArrayModel();
     private final ArrayPanel panel = new ArrayPanel();
-    final JComboBox<String> algoBox = new JComboBox<String>(AlgorithmFactory.names());
-    private final JComboBox<ArrayModel.Kind> kindBox = new JComboBox<ArrayModel.Kind>(ArrayModel.Kind.values());
+    private final JComboBox<String> algoBox = new JComboBox<>(AlgorithmFactory.names());
+    private final JComboBox<ArrayModel.Kind> kindBox = new JComboBox<>(ArrayModel.Kind.values());
     private final JSlider sizeSlider = new JSlider(5, 100, 30);
     private final JSlider speedSlider = new JSlider(1, 100, 40);
     private final JTextField targetField = new JTextField(4);
@@ -46,16 +44,17 @@ public class VisualizerFrame extends JFrame {
     private final JLabel complexityLabel = new JLabel(" ");
     private final JLabel statsLabel = new JLabel(" ");
     private final JLabel noteLabel = new JLabel(" ");
-    private final javax.swing.Timer timer;
+    private final Timer timer;
 
-    private List<Step> steps;      // every frame of the current run
-    private int index = -1;        // frame being shown (-1 = the untouched array)
+    private transient List<Step> steps;    // every frame of the current run
+    private int index = -1;                // frame being shown (-1 = the untouched array)
     private int[] startData;
+    private Integer target;                // null for sorts
 
     public VisualizerFrame() {
         super("Algorithm Visualizer");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        timer = new javax.swing.Timer(delay(), e -> next());
+        timer = new Timer(delay(), e -> next());
         buildLayout();
         wireEvents();
         model.generate(ArrayModel.Kind.RANDOM, sizeSlider.getValue());
@@ -93,7 +92,7 @@ public class VisualizerFrame extends JFrame {
         add(info, BorderLayout.SOUTH);
     }
 
-    private JButton button(String text, java.awt.event.ActionListener action) {
+    private static JButton button(String text, ActionListener action) {
         JButton b = new JButton(text);
         b.addActionListener(action);
         return b;
@@ -105,6 +104,12 @@ public class VisualizerFrame extends JFrame {
         sizeSlider.addChangeListener(e -> { if (!sizeSlider.getValueIsAdjusting()) newArray(); });
         speedSlider.addChangeListener(e -> timer.setDelay(delay()));
         startButton.addActionListener(e -> startPause());
+        // Re-record as soon as the target changes, so Start always searches for what is typed.
+        targetField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { SwingUtilities.invokeLater(VisualizerFrame.this::reset); }
+            @Override public void removeUpdate(DocumentEvent e)  { SwingUtilities.invokeLater(VisualizerFrame.this::reset); }
+            @Override public void changedUpdate(DocumentEvent e) { }
+        });
     }
 
     private int delay() {
@@ -124,15 +129,15 @@ public class VisualizerFrame extends JFrame {
         startData = model.copy();
         if (algo.needsSorted()) Arrays.sort(startData);
         targetField.setEnabled(algo.needsTarget());
-        steps = algo.run(startData, chooseTarget(algo));
+        target = algo.needsTarget() ? chooseTarget() : null;
+        steps = algo.run(startData, target == null ? 0 : target);
         index = -1;
         complexityLabel.setText(algo.getName() + ":  " + algo.complexity());
         startButton.setText("Start");
         showStart();
     }
 
-    private int chooseTarget(Algorithm algo) {
-        if (!algo.needsTarget()) return 0;
+    private int chooseTarget() {
         try {
             return Integer.parseInt(targetField.getText().trim());
         } catch (NumberFormatException e) {
@@ -184,55 +189,19 @@ public class VisualizerFrame extends JFrame {
     private void showStart() {
         Role[] normal = new Role[startData.length];
         Arrays.fill(normal, Role.NORMAL);
-        panel.show(startData, normal);
+        panel.show(new Step(startData, normal, "", 0, 0));
         statsLabel.setText("Comparisons: 0    Writes: 0    Step 0 / " + steps.size());
-        noteLabel.setText("Press Start");
+        noteLabel.setText(target == null ? "Press Start" : "Press Start to search for " + target);
     }
 
     private void showStep() {
         Step s = steps.get(index);
-        panel.show(s.getData(), s.getRoles());
+        panel.show(s);
         statsLabel.setText("Comparisons: " + s.getComparisons() + "    Writes: " + s.getWrites()
                 + "    Step " + (index + 1) + " / " + steps.size());
         noteLabel.setText(s.getNote());
     }
 
-    /** Draws the bars. */
-    static class ArrayPanel extends JPanel {
-        private int[] data = new int[0];
-        private Role[] roles = new Role[0];
-
-        ArrayPanel() {
-            setPreferredSize(new Dimension(900, 380));
-            setBackground(Color.WHITE);
-        }
-
-        void show(int[] d, Role[] r) {
-            data = d;
-            roles = r;
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            int n = data.length;
-            if (n == 0) return;
-            int max = 1;
-            for (int v : data) max = Math.max(max, v);
-            double barWidth = (double) getWidth() / n;
-            int usable = getHeight() - 40;
-            for (int i = 0; i < n; i++) {
-                int h = (int) ((double) data[i] / max * usable);
-                int x = (int) (i * barWidth);
-                g.setColor(COLOURS.get(roles[i]));
-                g.fillRect(x + 1, getHeight() - h - 20, Math.max(1, (int) barWidth - 2), h);
-                if (n <= 30) {
-                    g.setColor(Color.DARK_GRAY);
-                    g.setFont(new Font("SansSerif", Font.PLAIN, 10));
-                    g.drawString(String.valueOf(data[i]), x + (int) barWidth / 2 - 5, getHeight() - 6);
-                }
-            }
-        }
-    }
+    // ---------- used by tools that drive the window (e.g. screenshots) ----------
+    void select(String algorithmName) { algoBox.setSelectedItem(algorithmName); }
 }

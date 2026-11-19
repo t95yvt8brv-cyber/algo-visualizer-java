@@ -1,7 +1,13 @@
+package visualizer.algorithms.sorting;
+
+import visualizer.algorithms.SortingAlgorithm;
+import visualizer.model.Role;
+
+/** Finds the smallest remaining value and puts it at the front, one position at a time. */
 public class SelectionSort extends SortingAlgorithm {
 
     public SelectionSort() {
-        super("Selection Sort", "O(n^2)", "O(n^2)", "O(n^2)", "O(1)");
+        super("Selection Sort", "O(n^2)", "O(n^2)", "O(n^2)", "O(1)", false);
     }
 
     @Override
@@ -18,7 +24,7 @@ public class SelectionSort extends SortingAlgorithm {
                 swap(a, i, m);
                 frame(a, "Put " + a[i] + " at position " + i).mark(Role.SWAP, i, m).save();
             }
-            roles[i] = Role.SORTED;
+            setRole(i, Role.SORTED);
         }
         finish(a);
     }

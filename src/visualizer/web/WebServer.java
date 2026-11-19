@@ -1,3 +1,5 @@
+package visualizer.web;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -13,13 +15,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import visualizer.algorithms.Algorithm;
+import visualizer.algorithms.AlgorithmFactory;
+import visualizer.model.ArrayModel;
+import visualizer.model.Role;
+import visualizer.model.Step;
 
 /**
  * Optional browser front end. The same Algorithm classes record the steps, and the page
  * in web/index.html plays them back. It's a second "view" on the same model, and none of the
  * algorithm classes had to change for it.
  *
- * Run with:  java -cp out WebServer        then open http://localhost:8080
+ * Run with:  java -cp out visualizer.web.WebServer       then open http://localhost:8080
  */
 public class WebServer {
 
@@ -90,7 +97,7 @@ public class WebServer {
             }
             sb.append("]}");
             send(ex, 200, "application/json", sb.toString());
-        } catch (RuntimeException e) {              // bad name, kind or number in the query
+        } catch (IllegalArgumentException e) {      // unknown algorithm or kind, or a bad number
             send(ex, 400, "application/json", "{\"error\":" + str(String.valueOf(e.getMessage())) + "}");
         }
     }
